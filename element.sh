@@ -1,52 +1,39 @@
 #!/bin/bash
+PSQL="psql -X --username=freecodecamp --dbname=periodic_table --tuples-only -c"
 
-PSQL="psql --username=freecodecamp --dbname=periodic_table --tuples-only -c"
-
-#  check if an argument is provided
-if [[ -z $1 ]]
-then
+MAIN_PROGRAM() {
+  if [[ -z $1 ]]
+  then
     echo "Please provide an element as an argument."
-    exit 0
-fi
+  else
+    PRINT_ELEMENT $1
+  fi
+}
 
-# use the first argument as the SYMBOL
-SYMBOL=$1
-
- 
-# if input is not a number
-if [[ ! $SYMBOL =~ ^[0-9]+$ ]]
-then
-    # if input is greater than two letters
-    LENGTH=$(echo -n "$SYMBOL" | wc -m)
-    if [[ $LENGTH -gt 2 ]]
-    then
-        # get data by full name
-        DATA=$($PSQL "SELECT * FROM elements INNER JOIN properties USING(atomic_number) INNER JOIN types USING(type_id) WHERE name = '$SYMBOL'")
-    else
-        # get data by atomic symbol
-        DATA=$($PSQL "SELECT * FROM elements INNER JOIN properties USING(atomic_number) INNER JOIN types USING(type_id) WHERE symbol = '$SYMBOL'")
-    fi
-else
-    # get data by atomic number
-    DATA=$($PSQL "SELECT * FROM elements INNER JOIN properties USING(atomic_number) INNER JOIN types USING(type_id) WHERE atomic_number = $SYMBOL")
-fi
-
-# Check if data is empty
-
-if [[ -z $DATA ]]
-then
+PRINT_ELEMENT() {
+  INPUT=$1
+  if [[ ! $INPUT =~ ^[0-9]+$ ]]
+  then
+    ATOMIC_NUMBER=$(echo $($PSQL "SELECT atomic_number FROM elements WHERE symbol='$INPUT' OR name='$INPUT';") | sed 's/ //g')
+  else
+    ATOMIC_NUMBER=$(echo $($PSQL "SELECT atomic_number FROM elements WHERE atomic_number=$INPUT;") | sed 's/ //g')
+  fi
+  
+  if [[ -z $ATOMIC_NUMBER ]]
+  then
     echo "I could not find that element in the database."
-else
-    # Parse and display the data
-    echo $DATA | while read TYPEID BAR NUMBER BAR SYMBOL BAR NAME BAR WEIGHT BAR MELTING BAR BOILING BAR TYPE
+  else
+    ELEMENT_INFO=$($PSQL "SELECT elements.atomic_number, elements.name, elements.symbol, types.type, properties.atomic_mass, properties.melting_point_celsius, properties.boiling_point_celsius FROM elements JOIN properties ON elements.atomic_number=properties.atomic_number JOIN types ON properties.type_id=types.type_id WHERE elements.atomic_number=$ATOMIC_NUMBER;")
+    
+    echo "$ELEMENT_INFO" | while IFS=" | " read ATOMIC_NUMBER NAME SYMBOL TYPE ATOMIC_MASS MELTING_POINT_CELSIUS BOILING_POINT_CELSIUS
     do
-        echo "The element with atomic number $NUMBER is $NAME ($SYMBOL). It's a $TYPE, with a mass of $WEIGHT amu. $NAME has a melting point of $MELTING celsius and a boiling point of $BOILING celsius."
+      echo "The element with atomic number $ATOMIC_NUMBER is $NAME ($SYMBOL). It's a $TYPE, with a mass of $ATOMIC_MASS amu. $NAME has a melting point of $MELTING_POINT_CELSIUS celsius and a boiling point of $BOILING_POINT_CELSIUS celsius."
     done
-fi
+  fi
+}
 
+START_PROGRAM() {
+  MAIN_PROGRAM $1
+}
 
-
-
-
-
-
+START_PROGRAM $1
